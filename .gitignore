@@ -1,5 +1,63 @@
+# =====================
+# Python Cache & Bytecode
+# =====================
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# =====================
+# Virtual Environments
+# =====================
 venv/
 .venv/
-__pycache__/
-*.pyc
+ENV/
+env/
+.ENV/
+.env/
+
+# =====================
+# OS & Editor Files
+# =====================
 .DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# =====================
+# VSCode
+# =====================
+.vscode/
+.history/
+
+# =====================
+# Logs / Temp / Outputs
+# =====================
+*.log
+*.tmp
+*.bak
+*.old
+*.orig
+*.out
+
+# =====================
+# Jupyter / Data Science
+# =====================
+.ipynb_checkpoints/
+__pycache__/
+*.ipynb_checkpoints
+*.csv
+*.pkl
+*.h5
+*.hdf5
+*.db
+*.sqlite
+*.parquet
+
+# =====================
+# Build / Packaging
+# =====================
+build/
+dist/
+*.egg-info/
+*.egg
