@@ -1,117 +1,141 @@
 import pygame
-import gymnasium as gym
-import minigrid  # noqa: F401
 from minigrid.core.actions import Actions
-import numpy as np
+from game.env_manager import EnvManager
+from game.world import World
+from game.renderer import (
+    draw_points,
+    draw_objects,
+    draw_grid_lines,
+    draw_score,
+    draw_legend,
+    draw_goal,
+)
+from game.config import GRID_SIZE, WINDOW_BASE, FPS
 
-# Mapping MiniGrid-Richtungen: 0=→, 1=↓, 2=←, 3=↑
+
+# Richtungstasten-Mapping
 KEY_TO_DIR = {
     pygame.K_RIGHT: 0,
-    pygame.K_DOWN:  1,
-    pygame.K_LEFT:  2,
-    pygame.K_UP:    3,
+    pygame.K_DOWN: 1,
+    pygame.K_LEFT: 2,
+    pygame.K_UP: 3,
 }
 
-def main():
-    env = gym.make("MiniGrid-Empty-5x5-v0", render_mode="rgb_array")
 
-    grid_size = 5
-
-    # 🧩 Hilfsfunktion für kompletten Reset (Umgebung + Punkte + Score)
-    def reset_game():
-        obs, info = env.reset()
-        # Punktgrid mit Nullen erstellen
-        pg = np.zeros((grid_size, grid_size), dtype=int)
-        # Zufällige Punkte nur innerhalb des Rands
-        for y in range(1, grid_size - 1):
-            for x in range(1, grid_size - 1):
-                pg[y, x] = np.random.randint(-5, 6)
-        # Start- und Zielposition auf 0
-        pg[1, 1] = 0
-        pg[grid_size - 2, grid_size - 2] = 0
-        # Score zurücksetzen
-        return obs, info, pg, 0
-
-    # Initiales Setup
-    obs, info, point_grid, score = reset_game()
-
+def init_pygame(frame_shape):
+    """Initialisiert das Fenster und Fonts basierend auf der Framegröße."""
     pygame.init()
-    pygame.display.set_caption("MiniGrid – Punkte sammeln!")
+    pygame.display.set_caption("MiniGrid – Adventure (Phase 2)")
+    h, w = frame_shape[:2]
+    scale = max(1, WINDOW_BASE // max(h, w))
+    scaled_size = (w * scale, h * scale)
+    screen = pygame.display.set_mode(scaled_size)
     clock = pygame.time.Clock()
     font = pygame.font.SysFont(None, 32)
     small_font = pygame.font.SysFont(None, 24)
+    return screen, scaled_size, clock, font, small_font
 
-    frame = env.render()
-    h, w = frame.shape[:2]
-    SCALE = 512 // max(h, w)
-    scaled_size = (w * SCALE, h * SCALE)
-    screen = pygame.display.set_mode(scaled_size)
 
+def main():
+    # Umgebung und Welt initialisieren
+    envm = EnvManager("MiniGrid-Empty-5x5-v0", render_mode="rgb_array")
+    obs, info = envm.reset()
+    world = World(GRID_SIZE, rng_seed=42)  # deterministisch für Tests
+    goal_cell = (GRID_SIZE - 2, GRID_SIZE - 2)  # Ziel unten rechts
+
+    # Fenster initialisieren
+    first = envm.render()
+    screen, scaled_size, clock, font, small_font = init_pygame(first.shape)
+    score = 0
     running = True
+
     while running:
-        # Eingaben abfragen
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+
             elif event.type == pygame.KEYDOWN:
+                # Spiel beenden
                 if event.key in (pygame.K_ESCAPE, pygame.K_q):
                     running = False
-                    break
 
-                # Nur A darf drehen (90° rechts)
-                if event.key == pygame.K_a:
-                    obs, reward, terminated, truncated, info = env.step(Actions.right)
-                    if terminated or truncated:
-                        obs, info, point_grid, score = reset_game()
-                    continue
+                # 🔁 Welt neu würfeln (R-Taste)
+                elif event.key == pygame.K_r:
+                    world = World(GRID_SIZE, rng_seed=None)
+                    score = 0
+                    goal_cell = (GRID_SIZE - 2, GRID_SIZE - 2)
 
-                # Pfeiltasten: nur bewegen, wenn Pfeilrichtung == Blickrichtung
-                if event.key in KEY_TO_DIR:
-                    agent_dir = env.unwrapped.agent_dir
+                # 🔄 Drehung (A-Taste)
+                elif event.key == pygame.K_a:
+                    _, _, term, trunc, _ = envm.step(Actions.right)
+                    if term or trunc:
+                        obs, info = envm.reset()
+                        world = World(GRID_SIZE)
+                        goal_cell = (GRID_SIZE - 2, GRID_SIZE - 2)
+                        score = 0
+
+                # 🚶‍♂️ Vorwärtsbewegung (Pfeiltasten)
+                elif event.key in KEY_TO_DIR:
                     desired_dir = KEY_TO_DIR[event.key]
-                    if desired_dir == agent_dir:
-                        obs, reward, terminated, truncated, info = env.step(Actions.forward)
 
-                        # Neue Position holen
-                        new_pos = env.unwrapped.agent_pos
-                        x, y = int(new_pos[0]), int(new_pos[1])
+                    # Nur bewegen, wenn Blickrichtung passt
+                    if desired_dir == envm.env.unwrapped.agent_dir:
+                        pos = envm.env.unwrapped.agent_pos
+                        x, y = int(pos[0]), int(pos[1])
+                        nx, ny = world.next_cell(x, y, desired_dir)
 
-                        # Punkte hinzufügen/abziehen, wenn vorhanden
-                        if 0 <= x < grid_size and 0 <= y < grid_size:
-                            score += point_grid[y, x]
-                            point_grid[y, x] = 0  # Feld geleert
+                        # 🚫 Blocklogik: Baum oder Wasser = unpassierbar
+                        if (
+                            0 <= nx < GRID_SIZE
+                            and 0 <= ny < GRID_SIZE
+                            and world.is_blocking((nx, ny))
+                        ):
+                            continue  # keine Bewegung
 
-                        # Wenn Spiel endet -> alles zurücksetzen
-                        if terminated or truncated:
-                            obs, info, point_grid, score = reset_game()
+                        # Schritt ausführen
+                        obs, reward, term, trunc, _ = envm.step(Actions.forward)
 
-        # Rendering + Skalierung
-        frame = env.render()
+                        # Punkte sammeln
+                        pos = envm.env.unwrapped.agent_pos
+                        px, py = int(pos[0]), int(pos[1])
+                        score += world.take_points(px, py)
+
+                        # ✅ Ziel erreicht → Reset
+                        if (px, py) == goal_cell:
+                            obs, info = envm.reset()
+                            world = World(GRID_SIZE)
+                            goal_cell = (GRID_SIZE - 2, GRID_SIZE - 2)
+                            score = 0
+                            continue
+
+                        # Falls Episode vorzeitig endet
+                        if term or trunc:
+                            obs, info = envm.reset()
+                            world = World(GRID_SIZE)
+                            goal_cell = (GRID_SIZE - 2, GRID_SIZE - 2)
+                            score = 0
+
+        # 🖼️ Frame rendern
+        frame = envm.render()
         surf = pygame.surfarray.make_surface(frame.swapaxes(0, 1))
         surf = pygame.transform.scale(surf, scaled_size)
         screen.blit(surf, (0, 0))
 
-        # Punkte auf Grid zeichnen
-        cell_size = scaled_size[0] / grid_size
-        for j in range(grid_size):
-            for i in range(grid_size):
-                val = point_grid[j, i]
-                if val != 0:
-                    text = small_font.render(str(val), True, (255, 255, 255))
-                    tx = int(i * cell_size + cell_size / 2 - text.get_width() / 2)
-                    ty = int(j * cell_size + cell_size / 2 - text.get_height() / 2)
-                    screen.blit(text, (tx, ty))
+        # 🔳 Overlays zeichnen
+        draw_objects(screen, scaled_size, world.objects)
+        draw_points(screen, scaled_size, world.point_grid, small_font)
+        draw_grid_lines(screen, scaled_size)
+        draw_score(screen, font, score)
+        draw_legend(screen, small_font)
+        draw_goal(screen, scaled_size, goal_cell)  # 🎯 Zielmarkierung
 
-        # Score anzeigen
-        score_text = font.render(f"Punkte: {score}", True, (255, 255, 0))
-        screen.blit(score_text, (10, 10))
-
+        # 🕹️ Anzeige aktualisieren
         pygame.display.flip()
-        clock.tick(30)
+        clock.tick(FPS)
 
-    env.close()
+    envm.close()
     pygame.quit()
+
 
 if __name__ == "__main__":
     main()
-
