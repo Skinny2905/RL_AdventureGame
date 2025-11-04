@@ -1,117 +1,214 @@
 import pygame
-import gymnasium as gym
-import minigrid  # noqa: F401
-from minigrid.core.actions import Actions
-import numpy as np
+import random
 
-# Mapping MiniGrid-Richtungen: 0=→, 1=↓, 2=←, 3=↑
-KEY_TO_DIR = {
-    pygame.K_RIGHT: 0,
-    pygame.K_DOWN:  1,
-    pygame.K_LEFT:  2,
-    pygame.K_UP:    3,
+# --- Spielfeldkonfiguration ---
+GRID_SIZE = 10
+CELL_SIZE = 50
+WIDTH = GRID_SIZE * CELL_SIZE
+HEIGHT = GRID_SIZE * CELL_SIZE + 120  # Platz für Punktestand & Historie
+
+# Farben
+COLORS = {
+    "grass": (34, 139, 34),       # Grün
+    "heavy": (128, 128, 128),     # Grau
+    "river": (0, 0, 139),         # Dunkelblau
+    "bridge": (139, 69, 19),      # Braun
+    "reward": (255, 215, 0),      # Gold
+    "trap": (0, 0, 0),            # Schwarz
+    "mountain": (255, 255, 255),  # Weiß
+    "goal": (135, 206, 235),      # Hellblau
+    "player": (255, 0, 0),        # Rot
 }
 
+# Punktwerte
+SCORES = {
+    "grass": 0,
+    "heavy": -1,
+    "river": -3,
+    "bridge": 0,
+    "reward": +5,
+    "trap": -5,
+    "mountain": None,  # unpassierbar
+    "goal": 0,
+}
+
+
+class Game:
+    def __init__(self):
+        self.previous_scores = []
+        self.reset_game()
+
+    def reset_game(self):
+        self.grid = [["grass" for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
+        self.field_scores = [[0 for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
+        self.score = 0
+        self.generate_map()
+
+    def generate_map(self):
+        # --- Flussrichtung ---
+        orientation = random.choice(["horizontal", "vertical"])
+
+        if orientation == "horizontal":
+            y = random.randint(2, GRID_SIZE - 3)
+            for x in range(GRID_SIZE):
+                self.grid[y][x] = "river"
+                self.field_scores[y][x] = SCORES["river"]
+            self.river_coords = [(x, y) for x in range(GRID_SIZE)]
+        else:
+            x = random.randint(2, GRID_SIZE - 3)
+            for y in range(GRID_SIZE):
+                self.grid[y][x] = "river"
+                self.field_scores[y][x] = SCORES["river"]
+            self.river_coords = [(x, y) for y in range(GRID_SIZE)]
+
+        # --- Brücken auf sinnvollen Positionen ---
+        bridge_candidates = [pos for pos in self.river_coords if (pos[0] + pos[1]) % 2 == 0]
+        bridge_count = max(1, len(bridge_candidates)//5)
+        random.shuffle(bridge_candidates)
+        for bx, by in bridge_candidates[:bridge_count]:
+            self.grid[by][bx] = "bridge"
+            self.field_scores[by][bx] = SCORES["bridge"]
+
+        # --- Berge (weiß) ---
+        for _ in range(random.randint(3, 6)):
+            x, y = random.randint(0, GRID_SIZE - 1), random.randint(0, GRID_SIZE - 1)
+            if self.grid[y][x] == "grass":
+                self.grid[y][x] = "mountain"
+                self.field_scores[y][x] = 0
+
+        # --- Schweres Terrain (grau) ---
+        for _ in range(random.randint(8, 12)):
+            x, y = random.randint(0, GRID_SIZE - 1), random.randint(0, GRID_SIZE - 1)
+            if self.grid[y][x] == "grass":
+                self.grid[y][x] = "heavy"
+                self.field_scores[y][x] = SCORES["heavy"]
+
+        # --- Belohnungen & Fallen ---
+        reward_count = random.randint(1, 3)
+        trap_count = random.randint(1, 3)
+        for _ in range(reward_count):
+            x, y = random.randint(0, GRID_SIZE - 1), random.randint(0, GRID_SIZE - 1)
+            if self.grid[y][x] == "grass":
+                self.grid[y][x] = "reward"
+                self.field_scores[y][x] = SCORES["reward"]
+
+        for _ in range(trap_count):
+            x, y = random.randint(0, GRID_SIZE - 1), random.randint(0, GRID_SIZE - 1)
+            if self.grid[y][x] == "grass":
+                self.grid[y][x] = "trap"
+                self.field_scores[y][x] = SCORES["trap"]
+
+        # --- Start und Ziel ---
+        self.place_start_and_goal(orientation)
+
+    def place_start_and_goal(self, orientation):
+        """Platziere Start- und Zielfeld an gegenüberliegenden Rändern"""
+        if orientation == "horizontal":
+            # Start links, Ziel rechts
+            sy, gy = random.randint(0, GRID_SIZE-1), random.randint(0, GRID_SIZE-1)
+            self.player_pos = [0, sy]
+            self.grid[sy][0] = "grass"
+            self.grid[gy][-1] = "goal"
+            self.goal_pos = [GRID_SIZE-1, gy]
+        else:
+            # Start oben, Ziel unten
+            sx, gx = random.randint(0, GRID_SIZE-1), random.randint(0, GRID_SIZE-1)
+            self.player_pos = [sx, 0]
+            self.grid[0][sx] = "grass"
+            self.grid[-1][gx] = "goal"
+            self.goal_pos = [gx, GRID_SIZE-1]
+
+    def move_player(self, dx, dy):
+        new_x = self.player_pos[0] + dx
+        new_y = self.player_pos[1] + dy
+        if not (0 <= new_x < GRID_SIZE and 0 <= new_y < GRID_SIZE):
+            return
+        cell_type = self.grid[new_y][new_x]
+        if SCORES[cell_type] is None:
+            return  # unpassierbar
+
+        # Punkte verrechnen
+        field_value = self.field_scores[new_y][new_x]
+        self.score += field_value
+        self.field_scores[new_y][new_x] = 0  # Punkte "verbraucht"
+
+        # Falle oder Belohnung wird nach Betreten zu Gras
+        if cell_type in ("reward", "trap"):
+            self.grid[new_y][new_x] = "grass"
+
+        # Spieler bewegen
+        self.player_pos = [new_x, new_y]
+
+        # Ziel erreicht?
+        if cell_type == "goal":
+            self.previous_scores.append(self.score)
+            self.reset_game()
+
+    def draw(self, screen, font):
+        # Karte zeichnen
+        for y in range(GRID_SIZE):
+            for x in range(GRID_SIZE):
+                rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+                color = COLORS[self.grid[y][x]]
+                pygame.draw.rect(screen, color, rect)
+                pygame.draw.rect(screen, (0, 0, 0), rect, 1)
+
+                # Punktewert anzeigen (falls sichtbar)
+                val = self.field_scores[y][x]
+                if SCORES.get(self.grid[y][x]) is not None:
+                    text = font.render(str(val), True, (255, 255, 255))
+                    text_rect = text.get_rect(center=rect.center)
+                    screen.blit(text, text_rect)
+
+        # Spieler zeichnen
+        px, py = self.player_pos
+        prect = pygame.Rect(px * CELL_SIZE + 8, py * CELL_SIZE + 8, CELL_SIZE - 16, CELL_SIZE - 16)
+        pygame.draw.rect(screen, COLORS["player"], prect)
+
+        # Aktuelle Punkte
+        score_text = font.render(f"Aktuelle Punkte: {self.score}", True, (255, 255, 255))
+        screen.blit(score_text, (10, HEIGHT - 100))
+
+        # Punkt-Historie
+        hist_text = "Letzte Runden: " + ", ".join(map(str, self.previous_scores[-5:])) if self.previous_scores else "Noch keine Ziele erreicht."
+        hist_surface = font.render(hist_text, True, (200, 200, 200))
+        screen.blit(hist_surface, (10, HEIGHT - 60))
+
+
+# --- Hauptprogramm ---
 def main():
-    env = gym.make("MiniGrid-Empty-5x5-v0", render_mode="rgb_array")
-
-    grid_size = 5
-
-    # 🧩 Hilfsfunktion für kompletten Reset (Umgebung + Punkte + Score)
-    def reset_game():
-        obs, info = env.reset()
-        # Punktgrid mit Nullen erstellen
-        pg = np.zeros((grid_size, grid_size), dtype=int)
-        # Zufällige Punkte nur innerhalb des Rands
-        for y in range(1, grid_size - 1):
-            for x in range(1, grid_size - 1):
-                pg[y, x] = np.random.randint(-5, 6)
-        # Start- und Zielposition auf 0
-        pg[1, 1] = 0
-        pg[grid_size - 2, grid_size - 2] = 0
-        # Score zurücksetzen
-        return obs, info, pg, 0
-
-    # Initiales Setup
-    obs, info, point_grid, score = reset_game()
-
     pygame.init()
-    pygame.display.set_caption("MiniGrid – Punkte sammeln!")
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    pygame.display.set_caption("Grid-Abenteuer mit Ziel, Punkten & Historie")
     clock = pygame.time.Clock()
-    font = pygame.font.SysFont(None, 32)
-    small_font = pygame.font.SysFont(None, 24)
+    font = pygame.font.SysFont(None, 24)
 
-    frame = env.render()
-    h, w = frame.shape[:2]
-    SCALE = 512 // max(h, w)
-    scaled_size = (w * SCALE, h * SCALE)
-    screen = pygame.display.set_mode(scaled_size)
-
+    game = Game()
     running = True
+
     while running:
-        # Eingaben abfragen
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN:
-                if event.key in (pygame.K_ESCAPE, pygame.K_q):
+                if event.key == pygame.K_ESCAPE:
                     running = False
-                    break
+                elif event.key == pygame.K_UP:
+                    game.move_player(0, -1)
+                elif event.key == pygame.K_DOWN:
+                    game.move_player(0, 1)
+                elif event.key == pygame.K_LEFT:
+                    game.move_player(-1, 0)
+                elif event.key == pygame.K_RIGHT:
+                    game.move_player(1, 0)
 
-                # Nur A darf drehen (90° rechts)
-                if event.key == pygame.K_a:
-                    obs, reward, terminated, truncated, info = env.step(Actions.right)
-                    if terminated or truncated:
-                        obs, info, point_grid, score = reset_game()
-                    continue
-
-                # Pfeiltasten: nur bewegen, wenn Pfeilrichtung == Blickrichtung
-                if event.key in KEY_TO_DIR:
-                    agent_dir = env.unwrapped.agent_dir
-                    desired_dir = KEY_TO_DIR[event.key]
-                    if desired_dir == agent_dir:
-                        obs, reward, terminated, truncated, info = env.step(Actions.forward)
-
-                        # Neue Position holen
-                        new_pos = env.unwrapped.agent_pos
-                        x, y = int(new_pos[0]), int(new_pos[1])
-
-                        # Punkte hinzufügen/abziehen, wenn vorhanden
-                        if 0 <= x < grid_size and 0 <= y < grid_size:
-                            score += point_grid[y, x]
-                            point_grid[y, x] = 0  # Feld geleert
-
-                        # Wenn Spiel endet -> alles zurücksetzen
-                        if terminated or truncated:
-                            obs, info, point_grid, score = reset_game()
-
-        # Rendering + Skalierung
-        frame = env.render()
-        surf = pygame.surfarray.make_surface(frame.swapaxes(0, 1))
-        surf = pygame.transform.scale(surf, scaled_size)
-        screen.blit(surf, (0, 0))
-
-        # Punkte auf Grid zeichnen
-        cell_size = scaled_size[0] / grid_size
-        for j in range(grid_size):
-            for i in range(grid_size):
-                val = point_grid[j, i]
-                if val != 0:
-                    text = small_font.render(str(val), True, (255, 255, 255))
-                    tx = int(i * cell_size + cell_size / 2 - text.get_width() / 2)
-                    ty = int(j * cell_size + cell_size / 2 - text.get_height() / 2)
-                    screen.blit(text, (tx, ty))
-
-        # Score anzeigen
-        score_text = font.render(f"Punkte: {score}", True, (255, 255, 0))
-        screen.blit(score_text, (10, 10))
-
+        screen.fill((0, 0, 0))
+        game.draw(screen, font)
         pygame.display.flip()
-        clock.tick(30)
+        clock.tick(10)
 
-    env.close()
     pygame.quit()
+
 
 if __name__ == "__main__":
     main()
-
