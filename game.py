@@ -193,7 +193,8 @@ class Game:
         return {
             "id": datetime.utcnow().isoformat(timespec='seconds'),
             "grid": self.grid,
-            "goal_pos": self.goal_pos
+            "goal_pos": self.goal_pos,
+            "player_pos": list(self.player_pos)
         }
 
     def save_current_map_to_disk(self):
@@ -201,23 +202,37 @@ class Game:
         self.saved_maps.append(new_map)
         save_saved_maps(self.saved_maps)
 
-    def load_map_data(self, grid_data, goal_pos):
+    # Ersetze die ganze Methode load_map_data hiermit:
+
+    def load_map_data(self, grid_data, goal_pos, player_pos=None): # <--- WICHTIG: player_pos=None muss hier stehen!
+        self.stamina = 50  # <--- NEU: Tank auffüllen! WICHTIG!
+        
+        self.grid = [row[:] for row in grid_data]
         self.grid = [row[:] for row in grid_data]
         self.goal_pos = list(goal_pos)
         self.field_values = [[0 for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
+        
+        # Stamina-Werte wiederherstellen
         for y in range(GRID_SIZE):
             for x in range(GRID_SIZE):
                 t = self.grid[y][x]
                 if t in STAMINA and STAMINA[t] is not None:
                     self.field_values[y][x] = STAMINA[t] if t != "grass" else STAMINA["grass"]
-        # player spawn on grass
-        # player spawn on grass
-        grass_cells = [(x,y) for y in range(GRID_SIZE) for x in range(GRID_SIZE) if self.grid[y][x] == "grass"]
-        self.player_pos = list(random.choice(grass_cells)) if grass_cells else [0,0]
+        
+        # --- HIER WAR DER FEHLER (Doppelter Code) ---
+        # Jetzt machen wir es richtig: Entweder gespeicherte Position ODER Zufall.
+        if player_pos:
+            self.player_pos = list(player_pos)
+        else:
+            # Fallback: Zufällig (nur wenn keine Position übergeben wurde)
+            grass_cells = [(x,y) for y in range(GRID_SIZE) for x in range(GRID_SIZE) if self.grid[y][x] == "grass"]
+            self.player_pos = list(random.choice(grass_cells)) if grass_cells else [0,0]
+        
         self.last_pos = tuple(self.player_pos)
 
-        # --- NEU: Auch beim Laden merken wir uns den Startzustand! ---
-        self.start_map_data = self.export_current_map()
+        # Start-Daten sichern (falls noch nicht geschehen)
+        if not hasattr(self, "start_map_data") or self.start_map_data is None:
+             self.start_map_data = self.export_current_map()
 
 
     # ---------- Movement ----------

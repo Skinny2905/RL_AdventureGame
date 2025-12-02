@@ -106,7 +106,10 @@ def main():
                 # game.reset_game(use_saved=(game.current_saved_map_id is not None))
                 
                 # NEU (HINZUFÜGEN): Wir laden exakt die Start-Daten der aktuellen Map neu!
-                game.load_map_data(game.start_map_data["grid"], game.start_map_data["goal_pos"])
+                game.load_map_data(
+                    game.start_map_data["grid"],
+                    game.start_map_data["goal_pos"],
+                    game.start_map_data.get("player_pos"))
         # drawing
         screen.fill((10,10,10))
         draw_game(screen, game, font)
