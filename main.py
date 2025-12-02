@@ -5,6 +5,7 @@ from game import Game
 from menu import Menu
 from storage import load_saved_maps
 import random
+from q_agent import QAgent
 
 def draw_game(screen, game, font):
     # draw grid (same visuals as before)
@@ -51,6 +52,9 @@ def main():
     game = Game()
     menu = Menu(game)
 
+    agent = QAgent()
+    ai_mode = False
+
     running = True
     while running:
         for event in pygame.event.get():
@@ -65,28 +69,64 @@ def main():
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         menu.toggle()
-                    elif event.key == pygame.K_m:
-                        # save current map
-                        game.save_current_map_to_disk()
-                        # reload saved maps from disk to reflect saved id
-                        game.saved_maps = load_saved_maps()
-                    elif event.key == pygame.K_UP:
-                        game.move_player(0, -1)
-                    elif event.key == pygame.K_DOWN:
-                        game.move_player(0, 1)
-                    elif event.key == pygame.K_LEFT:
-                        game.move_player(-1, 0)
-                    elif event.key == pygame.K_RIGHT:
-                        game.move_player(1, 0)
 
+                    elif event.key == pygame.K_a:
+                        ai_mode = not ai_mode
+                        print(f"AI Mode: {ai_mode}")
+                        
+                        # Manuelle Steuerung nur wenn AI aus ist
+                    elif not ai_mode:
+                        if event.key == pygame.K_UP: game.move_player(0, -1)
+                        elif event.key == pygame.K_DOWN: game.move_player(0, 1)
+                        elif event.key == pygame.K_LEFT: game.move_player(-1, 0)
+                        elif event.key == pygame.K_RIGHT: game.move_player(1, 0)
+                        # Speichern nur manuell erlaubt
+                        elif event.key == pygame.K_m:
+                            game.save_current_map_to_disk()
+                            game.saved_maps = load_saved_maps()
+
+        # --- AI Logik (Läuft jeden Frame, wenn an) ---
+        if ai_mode and not menu.active:
+            # 1. Aktuellen Zustand holen
+            state = game.get_state()
+            
+            # 2. Agent entscheidet
+            action = agent.get_action(state)
+            
+            # 3. Spiel führt aus (über unsere neue step-Methode)
+            next_state, reward, done = game.step(action)
+            
+            # 4. Agent lernt
+            agent.update_q_table(state, action, reward, next_state, done)
+            agent.decay_epsilon()
+
+            # Wenn Runde vorbei, automatisch Neustart für Training
+            if done:
+                # ALT (LÖSCHEN): 
+                # game.reset_game(use_saved=(game.current_saved_map_id is not None))
+                
+                # NEU (HINZUFÜGEN): Wir laden exakt die Start-Daten der aktuellen Map neu!
+                game.load_map_data(game.start_map_data["grid"], game.start_map_data["goal_pos"])
         # drawing
         screen.fill((10,10,10))
         draw_game(screen, game, font)
         if menu.active:
             menu.draw(screen, font)
 
+            # NEU: Info anzeigen, ob AI läuft
+        if ai_mode:
+            ai_text = font.render(f"AI ACTIVE | Eps: {agent.epsilon:.2f}", True, (255, 0, 0))
+            screen.blit(ai_text, (WIDTH - 150, HEIGHT - 30))
+
+        if menu.active:
+            menu.draw(screen, font)
+
         pygame.display.flip()
-        clock.tick(30)
+
+        if ai_mode:
+            clock.tick(5) # So schnell wie möglich
+        else:
+            clock.tick(30)
 
     pygame.quit()
 

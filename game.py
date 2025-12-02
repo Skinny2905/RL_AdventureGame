@@ -140,6 +140,8 @@ class Game:
 
         self.last_pos = tuple(self.player_pos)
 
+        self.start_map_data = self.export_current_map()
+
     # ---------- Place player and goal ----------
     def place_start_and_goal(self, orientation):
         def find_nearby_grass(x, y):
@@ -209,9 +211,14 @@ class Game:
                 if t in STAMINA and STAMINA[t] is not None:
                     self.field_values[y][x] = STAMINA[t] if t != "grass" else STAMINA["grass"]
         # player spawn on grass
+        # player spawn on grass
         grass_cells = [(x,y) for y in range(GRID_SIZE) for x in range(GRID_SIZE) if self.grid[y][x] == "grass"]
         self.player_pos = list(random.choice(grass_cells)) if grass_cells else [0,0]
         self.last_pos = tuple(self.player_pos)
+
+        # --- NEU: Auch beim Laden merken wir uns den Startzustand! ---
+        self.start_map_data = self.export_current_map()
+
 
     # ---------- Movement ----------
     def move_player(self, dx, dy):
@@ -240,3 +247,56 @@ class Game:
                     rect = __import__("pygame").Rect(x*__import__("constants").CELL_SIZE, y*__import__("constants").CELL_SIZE, __import__("constants").CELL_SIZE, __import__("constants").CELL_SIZE)
                     # but to avoid circular import issues when calling draw from main we will just use screen coordinates directly in main
         # NOTE: draw is implemented in main to avoid circular imports
+# ... (der ganze restliche Code der Klasse Game bleibt gleich) ...
+
+    # --- NEU FÜR DEN AGENTEN ---
+    
+    def get_state(self):
+        """Gibt die aktuelle Position als Tuple zurück (für die Q-Table)"""
+        return tuple(self.player_pos)
+
+    def step(self, action):
+        """
+        Führt einen Schritt für den KI-Agenten aus.
+        Action: 0=Up, 1=Down, 2=Left, 3=Right
+        Return: (next_state, reward, done)
+        """
+        # 1. Aktion in Bewegung umwandeln
+        dx, dy = 0, 0
+        if action == 0: dy = -1   # Up
+        elif action == 1: dy = 1  # Down
+        elif action == 2: dx = -1 # Left
+        elif action == 3: dx = 1  # Right
+        
+        # Alten Stamina-Wert merken, um Reward zu berechnen
+        old_stamina = self.stamina
+        
+        # 2. Bewegung ausführen (nutzt die existierende Logik!)
+        self.move_player(dx, dy)
+        
+        # 3. Reward berechnen (Differenz der Stamina)
+        # Wenn wir in eine Falle laufen, sinkt Stamina stark -> negativer Reward
+        # Wenn wir ein Reward-Feld finden, steigt sie -> positiver Reward
+        reward = self.stamina - old_stamina
+        
+        # Wenn die Bewegung ungültig war (Wand), gab es keine Stamina-Änderung.
+        # Wir wollen den Agenten aber bestrafen, wenn er gegen Wände läuft.
+        if reward == 0:
+            reward = -5  # Strafe für "Gegen die Wand laufen"
+
+        # 4. Status prüfen
+        done = False
+        
+        # Ziel erreicht? (Prüfung auf Feld-Typ)
+        px, py = self.player_pos
+        if self.grid[py][px] == "goal":
+            done = True
+            reward += 100 # Extra Bonus fürs Ziel
+            
+        # Tot? (Stamina leer)
+        if self.stamina <= 0:
+            done = True
+            reward -= 100 # Strafe fürs Sterben
+
+        next_state = self.get_state()
+        return next_state, reward, done
