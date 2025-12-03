@@ -22,7 +22,7 @@ class Game:
 
     def reset_game(self, use_saved=False):
         """Reset stamina and either load current_saved_map or generate new map."""
-        self.stamina = 50
+        self.stamina = 100
         if use_saved and self.current_saved_map_id is not None:
             # load that saved map
             found = next((m for m in self.saved_maps if m["id"] == self.current_saved_map_id), None)

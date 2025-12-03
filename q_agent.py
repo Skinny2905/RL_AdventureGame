@@ -1,6 +1,7 @@
 import random
 import numpy as np
 from collections import defaultdict
+from brain_storage import BrainStorage
 
 class QAgent:
     def __init__(self, learning_rate=0.1, discount_factor=0.9, 
@@ -11,6 +12,8 @@ class QAgent:
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_min
         self.q_table = defaultdict(lambda: np.zeros(4))
+
+        self.storage = BrainStorage()
 
     def get_action(self, state):
         if random.random() < self.epsilon:
@@ -29,3 +32,17 @@ class QAgent:
     def decay_epsilon(self):
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
+
+    def save_model(self, filename="q_brain.csv"):
+        """Gibt die Daten an den Speicher-Helfer weiter"""
+        self.storage.save(self.q_table, self.epsilon, filename)
+
+    def load_model(self, filename="q_brain.csv"):
+        """Fragt den Speicher-Helfer nach Daten"""
+        loaded_q, loaded_eps = self.storage.load(filename)
+        
+        # Wenn Daten gefunden wurden, übernehmen wir sie
+        if loaded_q is not None:
+            self.q_table = loaded_q
+            self.epsilon = loaded_eps
+            print(f"--> Agent hat Wissen übernommen. (Epsilon: {self.epsilon:.4f})")        
