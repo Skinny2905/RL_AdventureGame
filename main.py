@@ -97,6 +97,27 @@ def main():
                         
                     # Manuelle Steuerung nur wenn AI aus ist
                     elif not ai_mode:
+                        moved = False # Hilfsvariable
+                        if event.key == pygame.K_UP: 
+                            game.move_player(0, -1)
+                            moved = True
+                        elif event.key == pygame.K_DOWN: 
+                            game.move_player(0, 1)
+                            moved = True
+                        elif event.key == pygame.K_LEFT: 
+                            game.move_player(-1, 0)
+                            moved = True
+                        elif event.key == pygame.K_RIGHT: 
+                            game.move_player(1, 0)
+                            moved = True
+                        
+                        # NEU: Prüfen ob wir im Ziel sind (für den manuellen Spieler)
+                        if moved:
+                            px, py = game.player_pos
+                            if game.grid[py][px] == "goal":
+                                print("Ziel erreicht! (Manuell)")
+                                game.reset_game(use_saved=(game.current_saved_map_id is not None))
+
                         if event.key == pygame.K_UP: game.move_player(0, -1)
                         elif event.key == pygame.K_DOWN: game.move_player(0, 1)
                         elif event.key == pygame.K_LEFT: game.move_player(-1, 0)
@@ -124,8 +145,11 @@ def main():
 
             # Wenn Runde vorbei, automatisch Neustart für Training
             if done:
-                # 1. Erfolg berechnen (Boolean für Excel)
-                success = True if game.stamina > 0 else False
+
+                px, py = game.player_pos
+                is_at_goal = (game.grid[py][px] == "goal")
+
+                success = True if is_at_goal else False
                 outcome_text = "Goal" if success else "Dead"
                 
                 # 2. Prüfen, ob wir im "Test-Modus" sind
@@ -150,12 +174,26 @@ def main():
                 
                 episode_count += 1
                 current_steps = 0 # Reset für nächste Runde
+
                 
-                # Wir laden exakt die Start-Daten der aktuellen Map neu!
-                game.load_map_data(
-                    game.start_map_data["grid"],
-                    game.start_map_data["goal_pos"],
-                    game.start_map_data.get("player_pos"))
+                
+                if success:
+                    # 1. ZIEL ERREICHT: Belohnung! Wir generieren eine NEUE, andere Map.
+                    # Wir setzen auch die gespeicherte ID zurück, damit er nicht immer wieder die gleiche lädt, 
+                    # falls du vorher eine aus dem Menü gewählt hattest.
+                    game.current_saved_map_id = None 
+                    game.reset_game(use_saved=False)
+                    print("--> Sieg! Neue Map generiert.")
+                    
+                else:
+                    # 2. GESTORBEN: Strafe! Er muss die GLEICHE Map nochmal üben.
+                    # Das ist wichtig fürs Lernen: Er muss herausfinden, wie er DIESE Situation löst.
+                    game.load_map_data(
+                        game.start_map_data["grid"],
+                        game.start_map_data["goal_pos"],
+                        game.start_map_data.get("player_pos")
+                    )
+                    print("--> Tot. Map wird neu gestartet (Retry).")
         
         # drawing
         screen.fill((10,10,10))

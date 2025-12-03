@@ -205,7 +205,7 @@ class Game:
     # Ersetze die ganze Methode load_map_data hiermit:
 
     def load_map_data(self, grid_data, goal_pos, player_pos=None): # <--- WICHTIG: player_pos=None muss hier stehen!
-        self.stamina = 50  # <--- NEU: Tank auffüllen! WICHTIG!
+        self.stamina = 100  # <--- NEU: Tank auffüllen! WICHTIG!
         
         self.grid = [row[:] for row in grid_data]
         self.grid = [row[:] for row in grid_data]
@@ -253,7 +253,8 @@ class Game:
             self.field_values[prev_y][prev_x] = STAMINA["grass"]
         if cell_type == "goal":
             self.previous_scores.append(self.stamina)
-            self.reset_game(use_saved=(self.current_saved_map_id is not None))
+            #self.reset_game(use_saved=(self.current_saved_map_id is not None))
+            pass
     # ---------- Drawing ----------
         def draw(self, screen, font, COLORS):
             # draw grid
