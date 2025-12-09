@@ -117,11 +117,7 @@ def main():
                             if game.grid[py][px] == "goal":
                                 print("Ziel erreicht! (Manuell)")
                                 game.reset_game(use_saved=(game.current_saved_map_id is not None))
-
-                        if event.key == pygame.K_UP: game.move_player(0, -1)
-                        elif event.key == pygame.K_DOWN: game.move_player(0, 1)
-                        elif event.key == pygame.K_LEFT: game.move_player(-1, 0)
-                        elif event.key == pygame.K_RIGHT: game.move_player(1, 0)
+                                
                         # Speichern nur manuell erlaubt
                         elif event.key == pygame.K_m:
                             game.save_current_map_to_disk()

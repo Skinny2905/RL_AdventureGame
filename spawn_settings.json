@@ -1,7 +1,4 @@
 {
-  "keep_spawn": true,
-  "spawn_pos": [
-    1,
-    0
-  ]
+  "keep_spawn": false,
+  "spawn_pos": null
 }

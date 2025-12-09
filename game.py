@@ -20,7 +20,7 @@ class Game:
     def save_spawn_state(self):
         save_spawn_settings({"keep_spawn": self.keep_spawn, "spawn_pos": self.saved_spawn_pos})
 
-    def reset_game(self, use_saved=False):
+    def reset_game(self, use_saved):
         """Reset stamina and either load current_saved_map or generate new map."""
         self.stamina = 100
         if use_saved and self.current_saved_map_id is not None:
@@ -202,8 +202,6 @@ class Game:
         self.saved_maps.append(new_map)
         save_saved_maps(self.saved_maps)
 
-    # Ersetze die ganze Methode load_map_data hiermit:
-
     def load_map_data(self, grid_data, goal_pos, player_pos=None): # <--- WICHTIG: player_pos=None muss hier stehen!
         self.stamina = 100  # <--- NEU: Tank auffüllen! WICHTIG!
         
@@ -221,8 +219,8 @@ class Game:
         
         # --- HIER WAR DER FEHLER (Doppelter Code) ---
         # Jetzt machen wir es richtig: Entweder gespeicherte Position ODER Zufall.
-        if player_pos:
-            self.player_pos = list(player_pos)
+        if self.keep_spawn:
+            self.player_pos = self.saved_spawn_pos
         else:
             # Fallback: Zufällig (nur wenn keine Position übergeben wurde)
             grass_cells = [(x,y) for y in range(GRID_SIZE) for x in range(GRID_SIZE) if self.grid[y][x] == "grass"]
