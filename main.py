@@ -91,11 +91,7 @@ def main():
                         waiting_for_choice = False
                         print("--> Neue Map generiert.")
                     elif event.key == pygame.K_c: # WEITERLERNEN (Gleiche Map)
-                        game.load_map_data(
-                            game.start_map_data["grid"],
-                            game.start_map_data["goal_pos"],
-                            game.start_map_data.get("player_pos")
-                        )
+                        game.reset_game(use_saved=(game.current_saved_map_id is not None))
                         waiting_for_choice = False
                         print("--> Lerne auf aktueller Map weiter.")
 
@@ -156,12 +152,7 @@ def main():
                 if success:
                     waiting_for_choice = True # Stoppt die AI für die Abfrage
                 else:
-                    # Automatischer Retry bei Tod
-                    game.load_map_data(
-                        game.start_map_data["grid"],
-                        game.start_map_data["goal_pos"],
-                        game.start_map_data.get("player_pos")
-                    )
+                    game.reset_game(use_saved=(game.current_saved_map_id is not None))
 
         # --- DRAWING (Reihenfolge korrigiert!) ---
         screen.fill((10,10,10))  # 1. Hintergrund löschen
