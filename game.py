@@ -20,7 +20,7 @@ class Game:
     def save_spawn_state(self):
         save_spawn_settings({"keep_spawn": self.keep_spawn, "spawn_pos": self.saved_spawn_pos})
 
-    def reset_game(self, use_saved=False):
+    def reset_game(self, use_saved):
         """Reset stamina and either load current_saved_map or generate new map."""
         self.stamina = 100
         if use_saved and self.current_saved_map_id is not None:
