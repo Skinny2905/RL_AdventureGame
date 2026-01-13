@@ -4,7 +4,7 @@ from collections import defaultdict
 from brain_storage import BrainStorage
 
 class QAgent:
-    def __init__(self, learning_rate=0.1, discount_factor=0.9, 
+    def __init__(self, learning_rate=0.1, discount_factor=0.99, 
                  epsilon_start=1.0, epsilon_decay=0.9995, epsilon_min=0.01):
         self.lr = learning_rate
         self.gamma = discount_factor
@@ -23,7 +23,11 @@ class QAgent:
 
     def update_q_table(self, state, action, reward, next_state, done):
         old_value = self.q_table[state][action]
-        next_max = np.max(self.q_table[next_state]) if not done else 0
+        
+        if done:
+            next_max = 0
+        else:
+            next_max = np.max(self.q_table[next_state])
         
         # Bellman Equation
         new_value = old_value + self.lr * (reward + self.gamma * next_max - old_value)

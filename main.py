@@ -1,6 +1,5 @@
-# main.py
 import pygame
-import sys  # <--- NEU: Für Start-Argumente (load)
+import sys 
 from constants import WIDTH, HEIGHT, CELL_SIZE, GRID_SIZE, COLORS, STAMINA
 from game import Game
 from menu import Menu
@@ -10,7 +9,7 @@ from q_agent import QAgent
 from stats_logger import StatsLogger
 
 def draw_game(screen, game, font):
-    # draw grid (same visuals as before)
+    # 1. Grid zeichnen
     for y in range(GRID_SIZE):
         for x in range(GRID_SIZE):
             rect = pygame.Rect(x*CELL_SIZE, y*CELL_SIZE, CELL_SIZE, CELL_SIZE)
@@ -25,14 +24,15 @@ def draw_game(screen, game, font):
                 txt_rect = txt.get_rect(center=rect.center)
                 screen.blit(txt, txt_rect)
 
-    # draw player
+    # 2. Player zeichnen
     px, py = game.player_pos
     prect = pygame.Rect(px*CELL_SIZE + 6, py*CELL_SIZE + 6, CELL_SIZE-12, CELL_SIZE-12)
     pygame.draw.rect(screen, COLORS["player"], prect)
 
-    # draw UI area
+    # 3. UI Bereich am Boden
     ui_y = GRID_SIZE*CELL_SIZE + 6
     pygame.draw.rect(screen, COLORS["ui_bg"], (0, GRID_SIZE*CELL_SIZE, WIDTH, HEIGHT - GRID_SIZE*CELL_SIZE))
+    
     stamina_txt = font.render(f"Stamina: {game.stamina}", True, COLORS["text"])
     screen.blit(stamina_txt, (8, ui_y))
 
@@ -55,8 +55,7 @@ def main():
     menu = Menu(game)
     agent = QAgent()
     
-    # --- NEU: Start-Argumente prüfen ---
-    # Wenn wir 'python main.py load' eingeben, wird das Gehirn direkt geladen
+    # Start-Argumente prüfen
     if len(sys.argv) > 1 and sys.argv[1] == "load":
         print("--> Start-Argument 'load' erkannt! Lade Gehirn...")
         agent.load_model("q_brain.csv")
@@ -65,150 +64,126 @@ def main():
 
     logger = StatsLogger("training_log.csv")
     episode_count = 1
-    current_steps = 0  # Schritte in der aktuellen Runde zählen
+    current_steps = 0 
 
     ai_mode = False
+    waiting_for_choice = False # Status für die Abfrage nach Erfolg
 
     running = True
     while running:
+        # --- EVENT HANDLING ---
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+
+            # FALL 1: Menü ist offen
             elif menu.active:
                 res = menu.handle_event(event)
                 if res == "quit":
                     running = False
-            else:
-                # gameplay keys
+
+            # FALL 2: Ziel erreicht -> Auswahl N oder C
+            elif waiting_for_choice:
                 if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        menu.toggle()
+                    if event.key == pygame.K_n: # NEUE MAP
+                        game.current_saved_map_id = None 
+                        game.reset_game(use_saved=False)
+                        waiting_for_choice = False
+                        print("--> Neue Map generiert.")
+                    elif event.key == pygame.K_c: # WEITERLERNEN (Gleiche Map)
+                        game.load_map_data(
+                            game.start_map_data["grid"],
+                            game.start_map_data["goal_pos"],
+                            game.start_map_data.get("player_pos")
+                        )
+                        waiting_for_choice = False
+                        print("--> Lerne auf aktueller Map weiter.")
 
-                    elif event.key == pygame.K_a:
-                        ai_mode = not ai_mode
-                        print(f"AI Mode: {ai_mode}")
-
-                    elif event.key == pygame.K_s:
-                        agent.save_model("q_brain.csv")
+            # FALL 3: Normales Gameplay (Keys reagieren nur, wenn Fall 1 & 2 aus sind)
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    menu.toggle()
+                elif event.key == pygame.K_a:
+                    ai_mode = not ai_mode
+                    print(f"AI Mode: {ai_mode}")
+                elif event.key == pygame.K_s:
+                    agent.save_model("q_brain.csv")
+                elif event.key == pygame.K_l:
+                    agent.load_model("q_brain.csv")
+                elif event.key == pygame.K_m:
+                    game.save_current_map_to_disk()
+                    game.saved_maps = load_saved_maps()
+                
+                # Manuelle Steuerung (nur wenn AI aus)
+                elif not ai_mode:
+                    moved = False
+                    if event.key == pygame.K_UP: game.move_player(0, -1); moved = True
+                    elif event.key == pygame.K_DOWN: game.move_player(0, 1); moved = True
+                    elif event.key == pygame.K_LEFT: game.move_player(-1, 0); moved = True
+                    elif event.key == pygame.K_RIGHT: game.move_player(1, 0); moved = True
                     
-                    # NEU: Taste 'L' (Load) - Nur wenn DU es willst!
-                    elif event.key == pygame.K_l:
-                        agent.load_model("q_brain.csv")
-                        
-                    # Manuelle Steuerung nur wenn AI aus ist
-                    elif not ai_mode:
-                        moved = False # Hilfsvariable
-                        if event.key == pygame.K_UP: 
-                            game.move_player(0, -1)
-                            moved = True
-                        elif event.key == pygame.K_DOWN: 
-                            game.move_player(0, 1)
-                            moved = True
-                        elif event.key == pygame.K_LEFT: 
-                            game.move_player(-1, 0)
-                            moved = True
-                        elif event.key == pygame.K_RIGHT: 
-                            game.move_player(1, 0)
-                            moved = True
-                        
-                        # NEU: Prüfen ob wir im Ziel sind (für den manuellen Spieler)
-                        if moved:
-                            px, py = game.player_pos
-                            if game.grid[py][px] == "goal":
-                                print("Ziel erreicht! (Manuell)")
-                                game.reset_game(use_saved=(game.current_saved_map_id is not None))
-                                
-                        # Speichern nur manuell erlaubt
-                        elif event.key == pygame.K_m:
-                            game.save_current_map_to_disk()
-                            game.saved_maps = load_saved_maps()
+                    if moved:
+                        px, py = game.player_pos
+                        if game.grid[py][px] == "goal":
+                            game.reset_game(use_saved=(game.current_saved_map_id is not None))
 
-        # --- AI Logik (Läuft jeden Frame, wenn an) ---
-        if ai_mode and not menu.active:
-            # 1. Aktuellen Zustand holen
+        # --- AI LOGIK ---
+        if ai_mode and not menu.active and not waiting_for_choice:
             state = game.get_state()
-            
-            # 2. Agent entscheidet
             action = agent.get_action(state)
-            
-            # 3. Spiel führt aus (über unsere neue step-Methode)
             next_state, reward, done = game.step(action)
             current_steps += 1
             
-            # 4. Agent lernt
             agent.update_q_table(state, action, reward, next_state, done)
             agent.decay_epsilon()
 
-            # Wenn Runde vorbei, automatisch Neustart für Training
             if done:
-
                 px, py = game.player_pos
-                is_at_goal = (game.grid[py][px] == "goal")
-
-                success = True if is_at_goal else False
+                success = (game.grid[py][px] == "goal")
                 outcome_text = "Goal" if success else "Dead"
-                
-                # 2. Prüfen, ob wir im "Test-Modus" sind
-                # Definition: Wir testen, wenn wir quasi keinen Zufall mehr nutzen
-                is_testing = True if agent.epsilon < 0.05 else False
+                is_testing = (agent.epsilon < 0.05)
 
-                # 3. Statistik schreiben (Smartcab-Style)
                 logger.log_episode(
-                    trial=episode_count,
-                    testing=is_testing,   # <--- NEUE SPALTE
-                    steps=current_steps,
-                    stamina=game.stamina,
-                    epsilon=agent.epsilon,
-                    alpha=agent.lr,
-                    success=success,      # <--- NEUE SPALTE
-                    outcome=outcome_text
+                    trial=episode_count, testing=is_testing, steps=current_steps,
+                    stamina=game.stamina, epsilon=agent.epsilon, alpha=agent.lr,
+                    success=success, outcome=outcome_text
                 )
                 
-                print(f"Episode {episode_count}: {outcome_text} (Stamina: {game.stamina}) | Test: {is_testing}")
-                
-                print(f"Runde {episode_count} beendet. Log gespeichert.")
-                
+                print(f"Episode {episode_count}: {outcome_text} | Stamina: {game.stamina}")
                 episode_count += 1
-                current_steps = 0 # Reset für nächste Runde
-
-                
+                current_steps = 0 
                 
                 if success:
-                    # 1. ZIEL ERREICHT: Belohnung! Wir generieren eine NEUE, andere Map.
-                    # Wir setzen auch die gespeicherte ID zurück, damit er nicht immer wieder die gleiche lädt, 
-                    # falls du vorher eine aus dem Menü gewählt hattest.
-                    game.current_saved_map_id = None 
-                    game.reset_game(use_saved=False)
-                    print("--> Sieg! Neue Map generiert.")
-                    
+                    waiting_for_choice = True # Stoppt die AI für die Abfrage
                 else:
-                    # 2. GESTORBEN: Strafe! Er muss die GLEICHE Map nochmal üben.
-                    # Das ist wichtig fürs Lernen: Er muss herausfinden, wie er DIESE Situation löst.
+                    # Automatischer Retry bei Tod
                     game.load_map_data(
                         game.start_map_data["grid"],
                         game.start_map_data["goal_pos"],
                         game.start_map_data.get("player_pos")
                     )
-                    print("--> Tot. Map wird neu gestartet (Retry).")
+
+        # --- DRAWING (Reihenfolge korrigiert!) ---
+        screen.fill((10,10,10))  # 1. Hintergrund löschen
+        draw_game(screen, game, font) # 2. Spielwelt zeichnen
         
-        # drawing
-        screen.fill((10,10,10))
-        draw_game(screen, game, font)
-        
-        # NEU: Info anzeigen, ob AI läuft
+        # 3. Info Overlays
         if ai_mode:
             ai_text = font.render(f"AI ACTIVE | Eps: {agent.epsilon:.2f}", True, (255, 0, 0))
             screen.blit(ai_text, (WIDTH - 150, HEIGHT - 30))
+
+        if waiting_for_choice:
+            # Hintergrund-Box für Text
+            pygame.draw.rect(screen, (0,0,0), (WIDTH//2-170, HEIGHT//2-20, 340, 50))
+            pygame.draw.rect(screen, (255,255,0), (WIDTH//2-170, HEIGHT//2-20, 340, 50), 2)
+            choice_txt = font.render("ZIEL ERREICHT! [N] Neue Map | [C] Weiterlernen", True, (255, 255, 0))
+            screen.blit(choice_txt, (WIDTH // 2 - 150, HEIGHT // 2))
 
         if menu.active:
             menu.draw(screen, font)
 
         pygame.display.flip()
-
-        if ai_mode:
-            clock.tick(5) # DEINE GESCHWINDIGKEIT BLEIBT BEI 5!
-        else:
-            clock.tick(30)
+        clock.tick(5 if ai_mode else 30)
 
     pygame.quit()
 

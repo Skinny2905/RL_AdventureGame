@@ -305,7 +305,7 @@ class Game:
         px, py = self.player_pos
         if self.grid[py][px] == "goal":
             done = True
-            reward += 100 # Extra Bonus fürs Ziel
+            reward += 500 # Extra Bonus fürs Ziel
             
         # Tot? (Stamina leer)
         if self.stamina <= 0:
