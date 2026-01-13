@@ -91,12 +91,26 @@ def main():
                         waiting_for_choice = False
                         print("--> Neue Map generiert.")
                     elif event.key == pygame.K_c: # WEITERLERNEN (Gleiche Map)
-                        game.reset_game(use_saved=(game.current_saved_map_id is not None))
+                        if game.current_saved_map_id is not None:
+                            game.reset_game(use_saved=(game.current_saved_map_id is not None))
+                        else:
+                            game.load_map_data(
+                                game.start_map_data["grid"],
+                                game.start_map_data["goal_pos"],
+                                game.start_map_data.get("player_pos")
+                            )
                         waiting_for_choice = False
                         print("--> Lerne auf aktueller Map weiter.")
 
             elif waiting_for_choice and game.smooth:
-                game.reset_game(use_saved=(game.current_saved_map_id is not None))
+                if game.current_saved_map_id is not None:
+                    game.reset_game(use_saved=(game.current_saved_map_id is not None))
+                else:
+                    game.load_map_data(
+                        game.start_map_data["grid"],
+                        game.start_map_data["goal_pos"],
+                        game.start_map_data.get("player_pos")
+                    )
                 waiting_for_choice = False
                 print("--> Lerne auf aktueller Map weiter.")
 
@@ -157,7 +171,14 @@ def main():
                 if success:
                     waiting_for_choice = True # Stoppt die AI für die Abfrage
                 else:
-                    game.reset_game(use_saved=(game.current_saved_map_id is not None))
+                    if game.current_saved_map_id is not None:
+                        game.reset_game(use_saved=(game.current_saved_map_id is not None))
+                    else:
+                        game.load_map_data(
+                            game.start_map_data["grid"],
+                            game.start_map_data["goal_pos"],
+                            game.start_map_data.get("player_pos")
+                        )
 
         # --- DRAWING (Reihenfolge korrigiert!) ---
         screen.fill((10,10,10))  # 1. Hintergrund löschen
