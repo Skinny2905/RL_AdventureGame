@@ -83,7 +83,7 @@ def main():
                     running = False
 
             # FALL 2: Ziel erreicht -> Auswahl N oder C
-            elif waiting_for_choice:
+            elif waiting_for_choice and not game.smooth:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_n: # NEUE MAP
                         game.current_saved_map_id = None 
@@ -94,6 +94,11 @@ def main():
                         game.reset_game(use_saved=(game.current_saved_map_id is not None))
                         waiting_for_choice = False
                         print("--> Lerne auf aktueller Map weiter.")
+
+            elif waiting_for_choice and game.smooth:
+                game.reset_game(use_saved=(game.current_saved_map_id is not None))
+                waiting_for_choice = False
+                print("--> Lerne auf aktueller Map weiter.")
 
             # FALL 3: Normales Gameplay (Keys reagieren nur, wenn Fall 1 & 2 aus sind)
             elif event.type == pygame.KEYDOWN:
@@ -163,12 +168,12 @@ def main():
             ai_text = font.render(f"AI ACTIVE | Eps: {agent.epsilon:.2f}", True, (255, 0, 0))
             screen.blit(ai_text, (WIDTH - 150, HEIGHT - 30))
 
-        if waiting_for_choice:
+        if waiting_for_choice and not game.smooth:
             # Hintergrund-Box für Text
-            pygame.draw.rect(screen, (0,0,0), (WIDTH//2-170, HEIGHT//2-20, 340, 50))
-            pygame.draw.rect(screen, (255,255,0), (WIDTH//2-170, HEIGHT//2-20, 340, 50), 2)
+            pygame.draw.rect(screen, (0,0,0), (WIDTH//2-200, HEIGHT//2-20, 400, 50))
+            pygame.draw.rect(screen, (255,255,0), (WIDTH//2-200, HEIGHT//2-20, 400, 50), 2)
             choice_txt = font.render("ZIEL ERREICHT! [N] Neue Map | [C] Weiterlernen", True, (255, 255, 0))
-            screen.blit(choice_txt, (WIDTH // 2 - 150, HEIGHT // 2))
+            screen.blit(choice_txt, (WIDTH // 2 - 180, HEIGHT // 2))
 
         if menu.active:
             menu.draw(screen, font)

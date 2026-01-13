@@ -8,7 +8,7 @@ class Menu:
         self.game = game
         self.active = False
         # added "Keep Spawn" option minimally
-        self.options = ["Resume", "Load Random Map", "Saved Maps", "Keep Spawn", "Quit"]
+        self.options = ["Resume", "Smooth", "Load Random Map", "Saved Maps", "Keep Spawn", "Quit"]
         self.sel = 0
         self.submode = None  # None / "saved_list"
         self.saved_sel = 0
@@ -47,6 +47,8 @@ class Menu:
             choice = self.options[self.sel]
             if choice == "Resume":
                 self.active = False
+            elif choice == "Smooth":
+                self.game.smooth = not self.game.smooth
             elif choice == "Load Random Map":
                 self.game.current_saved_map_id = None
                 self.game.reset_game(use_saved=False)
@@ -110,6 +112,9 @@ class Menu:
                 label = opt
                 if opt == "Keep Spawn":
                     label = f"{opt}: {'ON' if getattr(self.game, 'keep_spawn', False) else 'OFF'}"
+                txt = font.render(label, True, COLORS["text"])
+                if opt == "Smooth":
+                    label = f"{opt}: {'ON' if getattr(self.game, 'smooth', False) else 'OFF'}"
                 txt = font.render(label, True, COLORS["text"])
                 screen.blit(txt, (bx+28, y))
             hint = font.render("Up/Down to navigate - Enter to choose - Esc to resume", True, (180,180,180))

@@ -10,6 +10,7 @@ class Game:
         s = load_spawn_settings()
         self.keep_spawn = s.get("keep_spawn", False)
         self.saved_spawn_pos = s.get("spawn_pos", None)
+        self.smooth = s.get("smooth", True)
 
         self.previous_scores = []            # history of stamina at goal
         self.saved_maps = load_saved_maps()  # persistent saved maps
